@@ -15,6 +15,11 @@ pub enum ProtMsg{
     // Create your custom types of messages
     // Example type is a ping message, which takes a Message and the sender replica
     Ping(Msg,Replica),
+
+    // Custom types
+    InitRBC(Msg,Replica),
+    Echo(Msg,Replica),
+    Vote(Msg,Replica),
 }
 
 #[derive(Debug,Serialize,Deserialize,Clone)]

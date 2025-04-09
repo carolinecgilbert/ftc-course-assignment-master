@@ -33,6 +33,20 @@ impl Context{
                     log::info!("Received Ping from node : {:?}",rep);
                     self.handle_ping(main_msg).await;
                 },
+                ProtMsg::InitRBC(_main_msg,rep)=> {
+                    // RBC initialized
+                    log::error!("Received InitRBC during PBFT from node : {:?}",rep);
+                },
+                ProtMsg::Echo(_main_msg,rep)=> {
+                    // RBC echo handler
+                    log::info!("Received Echo from node : {:?}",rep);
+                    //self.handle_echo(main_msg).await;
+                },
+                ProtMsg::Vote(_main_msg,rep)=> {
+                    // RBC vote handler
+                    log::info!("Received Vote from node : {:?}",rep);
+                    //self.handle_vote(main_msg).await;
+                },
             }
         }
         else {

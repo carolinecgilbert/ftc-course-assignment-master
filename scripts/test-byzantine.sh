@@ -18,14 +18,22 @@ TYPE=${TYPE:="release"}
     --syncer $1 \
     --byzantine false > logs/syncer.log &
 
-for((i=0;i<4;i++)); do
+for((i=0;i<3;i++)); do
 ./target/$TYPE/node \
     --config $TESTDIR/nodes-$i.json \
     --ip ip_file \
     --protocol rbc \
     --input $2 \
     --syncer $1 \
-    --byzantine $3 > logs/$i.log &
+    --byzantine false > logs/$i.log &
 done
+
+./target/$TYPE/node \
+    --config $TESTDIR/nodes-3.json \
+    --ip ip_file \
+    --protocol rbc \
+    --input $2 \
+    --syncer $1 \
+    --byzantine $3 > logs/3.log &
 
 # Kill all nodes sudo lsof -ti:7000-7015 | xargs kill -9

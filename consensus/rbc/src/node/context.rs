@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::{SocketAddr, SocketAddrV4}, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::HashMap, collections::HashSet, net::{SocketAddr, SocketAddrV4}, time::{SystemTime, UNIX_EPOCH}};
 
 use anyhow::{Result, anyhow};
 use config::Node;
@@ -31,6 +31,12 @@ pub struct Context {
     exit_rx: oneshot::Receiver<()>,
 
     // Add your custom fields here
+    // RBC fields to track echos and votes from other parties
+    pub echo:bool,
+    pub echo_map:HashMap<Vec<u8>, HashSet<Replica>>,
+    pub voted:bool,
+    pub vote_map:HashMap<Vec<u8>, HashSet<Replica>>,
+    pub terminated:bool,
 }
 
 impl Context {
@@ -83,7 +89,14 @@ impl Context {
                 cancel_handlers:HashMap::default(),
                 exit_rx: exit_rx,
 
-                inp_message:message
+                inp_message:message,
+
+                // Initialize fields for echos and votes
+                echo: true,
+                echo_map: HashMap::default(),
+                voted: false,
+                vote_map: HashMap::default(),
+                terminated: false,
             };
             for (id, sk_data) in config.sk_map.clone() {
                 c.sec_key_map.insert(id, sk_data.clone());
@@ -152,20 +165,20 @@ impl Context {
                     )?;
                     match sync_msg.state {
                         SyncState::START =>{
-                            log::error!("Consensus Start time: {:?}", SystemTime::now()
+                            log::info!("Consensus Start time: {:?}", SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap()
                                 .as_millis());
                             // Start your protocol from here
-                            // Write a function to broadcast a message. We demonstrate an example with a PING function
-                            self.start_ping().await;
+                            // start RBC protocol
+                            self.start_rbc().await;
 
                             let cancel_handler = self.sync_send.send(0, SyncMsg { sender: self.myid, state: SyncState::STARTED, value:"".to_string()}).await;
                             self.add_cancel_handler(cancel_handler);
                         },
                         SyncState::STOP =>{
                             // Code used for internal purposes
-                            log::error!("Consensus Stop time: {:?}", SystemTime::now()
+                            log::info!("Consensus Stop time: {:?}", SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap()
                                 .as_millis());
