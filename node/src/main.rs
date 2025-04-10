@@ -70,6 +70,9 @@ async fn main() -> Result<()> {
         "rbc" => {
             exit_tx = rbc::node::Context::spawn(config, input_value.as_bytes().to_vec(),node_normal).unwrap();
         },
+        "pbft" => {
+            exit_tx = pbft::node::Context::spawn(config, input_value.as_bytes().to_vec(),node_normal).unwrap();
+        },
         "sync" => {
             let f_str = syncer_file.to_string();
             log::info!("Logging the file f {}",f_str);

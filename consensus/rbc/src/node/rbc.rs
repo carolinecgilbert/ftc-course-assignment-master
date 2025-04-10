@@ -11,7 +11,7 @@ impl Context {
     pub async fn start_rbc(self: &mut Context){
         // Draft a message
         let msg = Msg{
-            content: "Hi".as_bytes().to_vec(),
+            content: self.inp_message.clone(),
             origin: self.myid
         };
 

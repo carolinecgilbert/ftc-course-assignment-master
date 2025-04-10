@@ -105,6 +105,7 @@ impl Context {
             if let Err(e) = c.run().await {
                 log::error!("Consensus error: {}", e);
             }
+            log::info!("Node is byzantine: {}", byz);
         });
         Ok(exit_tx)
     }

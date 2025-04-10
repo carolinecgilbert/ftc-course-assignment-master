@@ -734,6 +734,7 @@ dependencies = [
  "futures-util",
  "log",
  "network",
+ "pbft",
  "rbc",
  "signal-hook",
  "simple_logger",

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 config = { package = "config", path="../config"}
 rbc = {package = "rbc",path="../consensus/rbc"}
+pbft = {package = "pbft",path="../consensus/pbft"}
 #hash_cc = {package = "hash_cc",path="../consensus/hash_cc"}
 #hash_cc_baa = {package = "hash_cc_baa",path="../consensus/hash_cc_baa"}
 #pedavss_cc = {package = "pedavss_cc",path="../consensus/pedavss_cc"}

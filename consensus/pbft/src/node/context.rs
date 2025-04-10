@@ -21,6 +21,7 @@ pub struct Context {
     pub myid: usize,
     pub num_faults: usize,
     pub inp_message:Vec<u8>,
+    byz: bool,
 
     /// Secret Key map
     pub sec_key_map:HashMap<Replica, Vec<u8>>,
@@ -36,7 +37,8 @@ pub struct Context {
 impl Context {
     pub fn spawn(
         config:Node,
-        message: Vec<u8>
+        message: Vec<u8>,
+        byz: bool
     )->anyhow::Result<oneshot::Sender<()>>{
         let mut consensus_addrs :FnvHashMap<Replica,SocketAddr>= FnvHashMap::default();
         for (replica,address) in config.net_map.iter(){
@@ -77,6 +79,7 @@ impl Context {
                 num_nodes: config.num_nodes,
                 sec_key_map: HashMap::default(),
                 myid: config.id,
+                byz: byz,
                 num_faults: config.num_faults,
                 cancel_handlers:HashMap::default(),
                 exit_rx: exit_rx,
@@ -90,6 +93,7 @@ impl Context {
             if let Err(e) = c.run().await {
                 log::error!("Consensus error: {}", e);
             }
+            log::info!("Node is byzantine: {}", byz);
         });
         Ok(exit_tx)
     }
@@ -97,6 +101,10 @@ impl Context {
     pub async fn broadcast(&mut self, protmsg:ProtMsg){
         let sec_key_map = self.sec_key_map.clone();
         for (replica,sec_key) in sec_key_map.into_iter() {
+            if self.byz && replica%2 == 0{
+                // Simulates a crash fault
+                continue;
+            }
             if replica != self.myid{
                 let wrapper_msg = WrapperMsg::new(protmsg.clone(), self.myid, &sec_key.as_slice());
                 let cancel_handler:CancelHandler<Acknowledgement> = self.net_send.send(replica, wrapper_msg).await;
@@ -146,20 +154,19 @@ impl Context {
                     )?;
                     match sync_msg.state {
                         SyncState::START =>{
-                            log::error!("Consensus Start time: {:?}", SystemTime::now()
+                            log::info!("Consensus Start time: {:?}", SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap()
                                 .as_millis());
                             // Start your protocol from here
-                            // Write a function to broadcast a message. We demonstrate an example with a PING function
-                            self.start_ping().await;
+                            self.start_pbft().await;
 
                             let cancel_handler = self.sync_send.send(0, SyncMsg { sender: self.myid, state: SyncState::STARTED, value:"".to_string()}).await;
                             self.add_cancel_handler(cancel_handler);
                         },
                         SyncState::STOP =>{
                             // Code used for internal purposes
-                            log::error!("Consensus Stop time: {:?}", SystemTime::now()
+                            log::info!("Consensus Stop time: {:?}", SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap()
                                 .as_millis());
