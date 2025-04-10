@@ -14,6 +14,11 @@ impl Context {
             content: "Hi".as_bytes().to_vec(),
             origin: self.myid
         };
+
+        // Automatically record own echo and vote
+        self.echo_map.entry(msg.content.clone()).or_default().insert(self.myid);
+        self.vote_map.entry(msg.content.clone()).or_default().insert(self.myid);
+
         // Wrap the message in a type
         // Use different types of messages like INIT, ECHO, .... for the Bracha's RBC implementation
         let protocol_msg = ProtMsg::InitRBC(msg, self.myid);
