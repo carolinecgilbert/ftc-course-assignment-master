@@ -1,7 +1,7 @@
 use std::{sync::Arc};
 
 use crypto::hash::{verf_mac};
-use types::{{WrapperMsg, ProtMsg}};
+use types::{{WrapperMsg, ProtMsg}, SyncMsg, SyncState};
 use crate::node::{
     context::Context
 };
@@ -43,23 +43,34 @@ impl Context{
                     log::info!("Received Value from node : {:?}",rep);
                     self.handle_value(main_msg, rep).await;
                 },
-                // RBC messages ignore
-                ProtMsg::InitRBC(_main_msg,rep)=> {
+                // RBC messages 
+                ProtMsg::InitRBC(main_msg,rep)=> {
                     // RBC initialized
-                    log::error!("Received InitRBC during PBFT from node : {:?}",rep);
+                    log::info!("Received InitRBC from node : {:?}",rep);
+                    self.handle_init_rbc(main_msg).await;
                 },
-                ProtMsg::Echo(_main_msg,rep)=> {
+                ProtMsg::Echo(main_msg,rep)=> {
                     // RBC echo handler
-                    log::error!("Received RBC Echo during PBFT from node : {:?}",rep);
+                    log::info!("Received Echo from node : {:?}",rep);
+                    self.handle_echo(main_msg,rep).await;
                 },
-                ProtMsg::Vote(_main_msg,rep)=> {
+                ProtMsg::Vote(main_msg,rep)=> {
                     // RBC vote handler
-                    log::error!("Received RBC Vote during PBFT from node : {:?}",rep);
+                    log::info!("Received Vote from node : {:?}",rep);
+                    self.handle_vote(main_msg,rep).await;
                 },
             }
         }
         else {
             log::warn!("MAC Verification failed for message {:?}",wrapper_msg.protmsg);
         }
+    }
+
+    // Invoke this function once you terminate the protocol
+    pub async fn terminate(&mut self,data:String){
+        let cancel_handler = self.sync_send.send(0,
+            SyncMsg { sender: self.myid, state: SyncState::COMPLETED,value:data}
+        ).await;
+        self.add_cancel_handler(cancel_handler);
     }
 }

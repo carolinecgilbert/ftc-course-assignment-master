@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::{SocketAddr, SocketAddrV4}, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::HashMap, collections::HashSet, net::{SocketAddr, SocketAddrV4}, time::{SystemTime, UNIX_EPOCH}};
 
 use anyhow::{Result, anyhow};
 use config::Node;
@@ -35,6 +35,13 @@ pub struct Context {
     // fields for PBFT
     pub value_map:HashMap<Replica, Vec<u8>>, 
     pub started_rbc:bool,
+
+    // RBC fields to track echos and votes from other parties
+    pub echo:bool,
+    pub echo_map:HashMap<Vec<u8>, HashSet<Replica>>,
+    pub voted:bool,
+    pub vote_map:HashMap<Vec<u8>, HashSet<Replica>>,
+    pub terminated:bool,
 }
 
 impl Context {
@@ -91,7 +98,14 @@ impl Context {
 
                 // Init pbft fields
                 value_map: HashMap::default(),
-                started_rbc: false
+                started_rbc: false,
+
+                // Initialize fields for echos and votes
+                echo: true,
+                echo_map: HashMap::default(),
+                voted: false,
+                vote_map: HashMap::default(),
+                terminated: false,
             };
             for (id, sk_data) in config.sk_map.clone() {
                 c.sec_key_map.insert(id, sk_data.clone());

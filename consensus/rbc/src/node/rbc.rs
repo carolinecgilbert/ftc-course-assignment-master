@@ -24,8 +24,17 @@ impl Context {
         // Wrap the message in a type
         // Use different types of messages like INIT, ECHO, .... for the Bracha's RBC implementation
         let protocol_msg = ProtMsg::InitRBC(msg, self.myid);
+        let self_protocol_msg = protocol_msg.clone();
         // Broadcast the message to everyone
         self.broadcast(protocol_msg).await;
+
+        // Send init message to self as well
+        let wrapper_msg = types::WrapperMsg::new(
+            self_protocol_msg, 
+            self.myid,
+            self.sec_key_map.get(&self.myid).unwrap(),
+        );
+        self.send(self.myid, wrapper_msg).await;
     }
 
     pub async fn handle_init_rbc(self: &mut Context, msg:Msg){

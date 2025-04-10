@@ -1,4 +1,5 @@
 use types::{Msg, ProtMsg, Replica};
+use std::collections::HashSet;
 
 use super::Context;
 
@@ -38,14 +39,15 @@ impl Context {
             content: self.inp_message.clone(),
             origin: self.myid
         };
-        let protocol_msg = ProtMsg::Value(msg, self.myid);
         let leader_id = 0;
+        log::info!("Sending PBFT VALUE message {:?} to leader node {}", msg.content,leader_id);
+        let protocol_msg = ProtMsg::Value(msg, self.myid);
         let wrapper_msg = types::WrapperMsg::new(
             protocol_msg, 
             self.myid,
             self.sec_key_map.get(&leader_id).unwrap(),
         );
-        self.send(0, wrapper_msg).await;
+        self.send(leader_id, wrapper_msg).await;
         
     }
 
@@ -65,11 +67,140 @@ impl Context {
 
         // Record received value and broadcast median if n-f values received
         self.value_map.insert(sender, msg.content.clone());
-        log::info!("Received {} disctint values", self.value_map.len());
-        if !self.started_rbc && self.value_map.len() == self.num_nodes - self.num_faults {
+        let num_vals = self.value_map.len();
+        log::info!("Received {} disctint values", num_vals);
+        if !self.started_rbc && num_vals == self.num_nodes - self.num_faults {
             log::info!("Received sufficient values, starting RBC with median...");
             self.started_rbc = true;
+
+            // Convert each Vec<u8> to an integer and store in values
+            let mut converted_vals: Vec<u32> = Vec::default();
+            for (replica, value) in &self.value_map {
+                match std::str::from_utf8(value) {
+                    Ok(s) => match s.parse::<u32>() {
+                        Ok(num) => {
+                            converted_vals.push(num);
+                            log::info!("Node {} submitted integer value: {}", replica, num);
+                        }
+                        Err(e) => {
+                            log::error!("Failed to parse value from node {} as integer: {}", replica, e);
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("Invalid UTF-8 from node {}: {}", replica, e);
+                    }
+                }
+            }
+
+            // Sort values and compute median
+            converted_vals.sort();
+            let mid = converted_vals.len() / 2;
+            let median = if converted_vals.len() % 2 == 0 {
+                (converted_vals[mid-1] + converted_vals[mid]) / 2
+            }
+            else {
+                converted_vals[mid]
+            };
+            log::info!("converted_vals: {:?}, median: {}", converted_vals, median);
+            
+            let msg = Msg{
+                content: median.to_string().into_bytes(),
+                origin: self.myid
+            };
+    
+            // Automatically record own echo and vote
+            self.echo_map.entry(msg.content.clone()).or_default().insert(self.myid);
+            self.vote_map.entry(msg.content.clone()).or_default().insert(self.myid);
+    
+            // Wrap the message in a type
+            // Use different types of messages like INIT, ECHO, .... for the Bracha's RBC implementation
+            let protocol_msg = ProtMsg::InitRBC(msg, self.myid);
+            let self_protocol_msg = protocol_msg.clone();
+            // Broadcast the message to everyone
+            self.broadcast(protocol_msg).await;
+
+            // Send init message to self as well
+            let wrapper_msg = types::WrapperMsg::new(
+                self_protocol_msg, 
+                self.myid,
+                self.sec_key_map.get(&self.myid).unwrap(),
+            );
+            self.send(self.myid, wrapper_msg).await;
+
         }
         
+    }
+
+    // RBC CODE FROM rbc.ps 
+    pub async fn handle_init_rbc(self: &mut Context, msg:Msg){
+        log::info!("Received init message {:?} from node {}",msg.content,msg.origin);
+        // Send echo to all parties and set echo bool to false
+        if self.echo == true{
+            // Automatically record own echo
+            self.echo = false;
+            self.echo_map.entry(msg.content.clone()).or_default().insert(self.myid);
+            let echo_msg = ProtMsg::Echo(msg.clone(), self.myid);
+            log::info!("Broadcasting echo!");
+            self.broadcast(echo_msg).await;
+        }
+    }
+
+    pub async fn handle_echo(self: &mut Context, msg:Msg, sender:Replica){
+        log::info!("Received echo {:?} from node {}",msg.content,sender);
+        // Initialize hashset for this value if not already tracked
+        if !self.echo_map.contains_key(&msg.content) {
+            let new_value_echos = HashSet::default();
+            self.echo_map.insert(msg.content.clone(), new_value_echos);
+        }
+
+        // Insert msg origin into hash set for this value
+        let recvd_echos = self.echo_map.get_mut(&msg.content).unwrap();
+        recvd_echos.insert(sender);
+        let num_recvd_echos = recvd_echos.len();
+        log::info!("Received {} distinct echos.", num_recvd_echos);
+
+
+        // Send vote to all parties on receiving n-f distinct echos
+        if !self.voted && num_recvd_echos == (self.num_nodes-self.num_faults){
+            log::info!("Received sufficient echos, broadcasting vote!");
+            self.voted = true;
+            self.vote_map.entry(msg.content.clone()).or_default().insert(self.myid);
+            let vote_msg = ProtMsg::Vote(msg, self.myid);
+            self.broadcast(vote_msg).await;
+        }
+
+    }
+
+    pub async fn handle_vote(self: &mut Context, msg:Msg, sender:Replica){
+        log::info!("Received vote {:?} from node {}",msg.content,sender);
+        // Initialize hashset for this value if not already tracked
+        if !self.vote_map.contains_key(&msg.content){
+            let new_value_votes = HashSet::default();
+            self.vote_map.insert(msg.content.clone(), new_value_votes);
+        }
+        let recvd_msg = msg.content.clone();
+
+        // Insert msg origin into hash set for this value
+        let recvd_votes = self.vote_map.get_mut(&msg.content).unwrap();
+        recvd_votes.insert(sender);
+        let num_recvd_votes = recvd_votes.len();
+        log::info!("Received {} distinct votes.", num_recvd_votes);
+
+        // Send vote to all parties on receiving votes from f+1 distinct parties
+        if !self.voted && num_recvd_votes == (self.num_faults+1){
+            log::info!("Received f+1 votes, broadcasting vote!");
+            self.voted = true;
+            self.vote_map.entry(msg.content.clone()).or_default().insert(self.myid);
+            let vote_msg = ProtMsg::Vote(msg, self.myid);
+            self.broadcast(vote_msg).await;
+        }
+
+        // Deliver value on receiving votes from n-f distict parties
+        if !self.terminated && num_recvd_votes == (self.num_nodes-self.num_faults){
+            log::info!("Received sufficient votes, delivering vote!");
+            self.terminated = true;
+            let v = String::from_utf8(recvd_msg).unwrap();
+            self.terminate(v).await;
+        }
     }
 }
