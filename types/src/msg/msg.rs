@@ -20,6 +20,8 @@ pub enum ProtMsg{
     InitRBC(Msg,Replica),
     Echo(Msg,Replica),
     Vote(Msg,Replica),
+    InitPBFT(Msg,Replica),
+    Value(Msg,Replica),
 }
 
 #[derive(Debug,Serialize,Deserialize,Clone)]

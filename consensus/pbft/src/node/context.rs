@@ -32,6 +32,9 @@ pub struct Context {
     exit_rx: oneshot::Receiver<()>,
 
     // Add your custom fields here
+    // fields for PBFT
+    pub value_map:HashMap<Replica, Vec<u8>>, 
+    pub started_rbc:bool,
 }
 
 impl Context {
@@ -84,7 +87,11 @@ impl Context {
                 cancel_handlers:HashMap::default(),
                 exit_rx: exit_rx,
 
-                inp_message:message
+                inp_message:message,
+
+                // Init pbft fields
+                value_map: HashMap::default(),
+                started_rbc: false
             };
             for (id, sk_data) in config.sk_map.clone() {
                 c.sec_key_map.insert(id, sk_data.clone());
@@ -93,7 +100,6 @@ impl Context {
             if let Err(e) = c.run().await {
                 log::error!("Consensus error: {}", e);
             }
-            log::info!("Node is byzantine: {}", byz);
         });
         Ok(exit_tx)
     }
@@ -126,6 +132,9 @@ impl Context {
     }
 
     pub async fn run(&mut self)-> Result<()>{
+        // Log node config
+        log::info!("Byzantine node: {}", self.byz);
+        log::info!("Leader node: {}", self.myid==0);
         // The process starts listening to messages in this process. 
         // First, the node sends an alive message 
         let cancel_handler = self.sync_send.send(0,
@@ -159,7 +168,9 @@ impl Context {
                                 .unwrap()
                                 .as_millis());
                             // Start your protocol from here
-                            self.start_pbft().await;
+                            if self.myid == 0 {
+                                self.start_pbft().await;
+                            }
 
                             let cancel_handler = self.sync_send.send(0, SyncMsg { sender: self.myid, state: SyncState::STARTED, value:"".to_string()}).await;
                             self.add_cancel_handler(cancel_handler);

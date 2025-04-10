@@ -36,7 +36,7 @@ impl Context{
                 ProtMsg::InitRBC(main_msg,rep)=> {
                     // RBC initialized
                     log::info!("Received InitRBC from node : {:?}",rep);
-                    self.handle_init(main_msg).await;
+                    self.handle_init_rbc(main_msg).await;
                 },
                 ProtMsg::Echo(main_msg,rep)=> {
                     // RBC echo handler
@@ -47,6 +47,15 @@ impl Context{
                     // RBC vote handler
                     log::info!("Received Vote from node : {:?}",rep);
                     self.handle_vote(main_msg,rep).await;
+                },
+                // PBFT messages ignore
+                ProtMsg::InitPBFT(_main_msg,rep)=> {
+                    // PBFT init handler
+                    log::error!("Received InitPBFT during RBC from node : {:?}",rep);
+                },
+                ProtMsg::Value(_main_msg,rep)=> {
+                    // PBFT input value handler
+                    log::error!("Received PBFT Value during RBC from node : {:?}",rep);
                 },
 
             }

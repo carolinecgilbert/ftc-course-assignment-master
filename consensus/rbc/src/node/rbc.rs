@@ -9,6 +9,8 @@ impl Context {
     // In this example, the mut can (and must) be removed because we are not modifying the Context inside
     // the function. 
     pub async fn start_rbc(self: &mut Context){
+        log::info!("Node {} starting RBC...", self.myid);
+
         // Draft a message
         let msg = Msg{
             content: self.inp_message.clone(),
@@ -26,12 +28,15 @@ impl Context {
         self.broadcast(protocol_msg).await;
     }
 
-    pub async fn handle_init(self: &mut Context, msg:Msg){
+    pub async fn handle_init_rbc(self: &mut Context, msg:Msg){
         log::info!("Received init message {:?} from node {}",msg.content,msg.origin);
         // Send echo to all parties and set echo bool to false
         if self.echo == true{
+            // Automatically record own echo
             self.echo = false;
+            self.echo_map.entry(msg.content.clone()).or_default().insert(self.myid);
             let echo_msg = ProtMsg::Echo(msg.clone(), self.myid);
+            log::info!("Broadcasting echo!");
             self.broadcast(echo_msg).await;
         }
     }
@@ -55,6 +60,7 @@ impl Context {
         if !self.voted && num_recvd_echos == (self.num_nodes-self.num_faults){
             log::info!("Received sufficient echos, broadcasting vote!");
             self.voted = true;
+            self.vote_map.entry(msg.content.clone()).or_default().insert(self.myid);
             let vote_msg = ProtMsg::Vote(msg, self.myid);
             self.broadcast(vote_msg).await;
         }
@@ -80,6 +86,7 @@ impl Context {
         if !self.voted && num_recvd_votes == (self.num_faults+1){
             log::info!("Received f+1 votes, broadcasting vote!");
             self.voted = true;
+            self.vote_map.entry(msg.content.clone()).or_default().insert(self.myid);
             let vote_msg = ProtMsg::Vote(msg, self.myid);
             self.broadcast(vote_msg).await;
         }

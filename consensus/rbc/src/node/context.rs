@@ -98,6 +98,7 @@ impl Context {
                 vote_map: HashMap::default(),
                 terminated: false,
             };
+            log::info!("Byzantine node: {}", byz);
             for (id, sk_data) in config.sk_map.clone() {
                 c.sec_key_map.insert(id, sk_data.clone());
             }
@@ -105,7 +106,6 @@ impl Context {
             if let Err(e) = c.run().await {
                 log::error!("Consensus error: {}", e);
             }
-            log::info!("Node is byzantine: {}", byz);
         });
         Ok(exit_tx)
     }
@@ -171,8 +171,10 @@ impl Context {
                                 .unwrap()
                                 .as_millis());
                             // Start your protocol from here
-                            // start RBC protocol
-                            self.start_rbc().await;
+                            // start RBC protocol if node 0
+                            if self.myid == 0 {
+                                self.start_rbc().await;
+                            }
 
                             let cancel_handler = self.sync_send.send(0, SyncMsg { sender: self.myid, state: SyncState::STARTED, value:"".to_string()}).await;
                             self.add_cancel_handler(cancel_handler);
